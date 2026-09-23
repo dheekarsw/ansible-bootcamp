@@ -11,7 +11,7 @@
     git_repo_url: "https://github.com/dheekarsw/ansible-bootcamp.git"
     git_dest: "/home/{{ ansible_user }}/repo"
 
-    git_version: "2.43.5"
+    git_version: "2.55.0"
 
     # =========================
     # Podman
