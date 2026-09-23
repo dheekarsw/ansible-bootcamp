@@ -1,39 +1,245 @@
-kind: Deployment
-apiVersion: apps/v1
-metadata:
-  name: my-container
-  labels:
-    app: my-container
-spec:
-  replicas: 5
-  selector:
-    matchLabels:
-      app: my-container
-  template:
-    metadata:
-      labels:
-        app: my-container
-    spec:
-      containers:
-        - name: my-container
-          image: default-route-openshift-image-registry.apps.rm1.0a51.p1.openshiftapps.com/dheekarsw-dev/aowka:10
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8000
-              protocol: TCP
-          env:
-            # Diambil dari ConfigMap
-            - name: MONGODB_DATABASE
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: MONGODB_DATABASE
+---
+- name: Ensure required tooling is installed, validated and logged in
+  hosts: all
+  become: true
 
-            # Diambil dari Secret
-            - name: MONGO_URI
-              valueFrom:
-                secretKeyRef:
-                  name: app-db-secret
-                  key: MONGO_URI
-              
-              
+  vars:
+
+    # =========================
+    # Git
+    # =========================
+    git_repo_url: "https://github.com/dheekarsw/ansible-bootcamp.git"
+    git_dest: "/home/{{ ansible_user }}/repo"
+
+    git_version: "2.43.5"
+
+    # =========================
+    # Podman
+    # =========================
+    podman_registry_url: "quay.io"
+
+    podman_version: "4.9.4"
+
+    # =========================
+    # Python
+    # =========================
+    python_version: "3.13.13"
+
+    # =========================
+    # OpenShift CLI
+    # =========================
+    oc_version: "4.16.35"
+
+    oc_api_url: "https://api.example.com:6443"
+
+    oc_cli_download_url: >-
+      https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/
+      {{ oc_version }}/openshift-client-linux.tar.gz
+
+  vars_files:
+    - vars/vault.yml
+
+  pre_tasks:
+
+    # ==================================================
+    # PRE-VALIDATION
+    # ==================================================
+
+    - name: Validate Git repository URL
+      ansible.builtin.assert:
+        that:
+          - git_repo_url | length > 0
+          - git_repo_url is match('^https://github.com/.+/.+(\.git)?$')
+        fail_msg: >
+          Invalid Git repository URL.
+          Expected format:
+          https://github.com/USERNAME/REPOSITORY.git
+
+    - name: Validate Git destination
+      ansible.builtin.assert:
+        that:
+          - git_dest | length > 0
+          - git_dest.startswith('/home/')
+        fail_msg: "git_dest must be a valid path under /home."
+
+    - name: Validate Podman registry
+      ansible.builtin.assert:
+        that:
+          - podman_registry_url | length > 0
+          - podman_registry_username | length > 0
+          - podman_registry_password | length > 0
+        fail_msg: >
+          Podman registry URL, username and password must be provided.
+      no_log: true
+
+    - name: Validate OpenShift configuration
+      ansible.builtin.assert:
+        that:
+          - oc_api_url | length > 0
+          - oc_token | length > 0
+        fail_msg: >
+          OpenShift API URL and token must be provided.
+      no_log: true
+
+    - name: Validate required versions
+      ansible.builtin.assert:
+        that:
+          - git_version | length > 0
+          - podman_version | length > 0
+          - python_version | length > 0
+          - oc_version | length > 0
+        fail_msg: "All required tool versions must be specified."
+
+    # ==================================================
+    # INSTALL
+    # ==================================================
+
+    - name: Install exact Git version
+      ansible.builtin.dnf:
+        name: "git-{{ git_version }}"
+        state: present
+        allow_downgrade: true
+
+    - name: Install exact Podman version
+      ansible.builtin.dnf:
+        name: "podman-{{ podman_version }}"
+        state: present
+        allow_downgrade: true
+
+    - name: Install exact Python version
+      ansible.builtin.dnf:
+        name: "python3-{{ python_version }}"
+        state: present
+        allow_downgrade: true
+
+    # ==================================================
+    # OPENSHIFT CLI
+    # ==================================================
+
+    - name: Download exact oc CLI version
+      ansible.builtin.get_url:
+        url: "{{ oc_cli_download_url }}"
+        dest: "/tmp/openshift-client-linux.tar.gz"
+        mode: "0644"
+
+    - name: Extract oc CLI
+      ansible.builtin.unarchive:
+        src: "/tmp/openshift-client-linux.tar.gz"
+        dest: "/usr/local/bin"
+        remote_src: true
+        mode: "0755"
+
+    # ==================================================
+    # VALIDATE INSTALLED VERSIONS
+    # ==================================================
+
+    - name: Check Git version
+      ansible.builtin.command:
+        cmd: git --version
+      register: git_version_result
+      changed_when: false
+
+    - name: Check Podman version
+      ansible.builtin.command:
+        cmd: podman --version
+      register: podman_version_result
+      changed_when: false
+
+    - name: Check Python version
+      ansible.builtin.command:
+        cmd: python3 --version
+      register: python_version_result
+      changed_when: false
+
+    - name: Check OpenShift CLI version
+      ansible.builtin.command:
+        cmd: oc version --client
+      register: oc_version_result
+      changed_when: false
+
+    # ==================================================
+    # EXACT VERSION VALIDATION
+    # ==================================================
+
+    - name: Validate Git version
+      ansible.builtin.assert:
+        that:
+          - git_version_result.stdout is search('git version ' ~ git_version)
+        fail_msg:
+          "Git version mismatch. Expected {{ git_version }}, got {{ git_version_result.stdout }}"
+
+    - name: Validate Podman version
+      ansible.builtin.assert:
+        that:
+          - podman_version_result.stdout is search('podman version ' ~ podman_version)
+        fail_msg:
+          "Podman version mismatch. Expected {{ podman_version }}, got {{ podman_version_result.stdout }}"
+
+    - name: Validate Python version
+      ansible.builtin.assert:
+        that:
+          - python_version_result.stdout is search('Python ' ~ python_version)
+        fail_msg:
+          "Python version mismatch. Expected {{ python_version }}, got {{ python_version_result.stdout }}"
+
+    - name: Validate OpenShift CLI version
+      ansible.builtin.assert:
+        that:
+          - oc_version_result.stdout is search(oc_version)
+        fail_msg:
+          "oc version mismatch. Expected {{ oc_version }}, got {{ oc_version_result.stdout }}"
+
+    - name: Show installed versions
+      ansible.builtin.debug:
+        msg:
+          - "{{ git_version_result.stdout }}"
+          - "{{ podman_version_result.stdout }}"
+          - "{{ python_version_result.stdout }}"
+          - "{{ oc_version_result.stdout }}"
+
+    # ==================================================
+    # GIT CLONE
+    # ==================================================
+
+    - name: Clone Git repository
+      ansible.builtin.git:
+        repo: "{{ git_repo_url }}"
+        dest: "{{ git_dest }}"
+        version: HEAD
+        update: true
+
+    # ==================================================
+    # PODMAN LOGIN
+    # ==================================================
+
+    - name: Log in to container registry
+      ansible.builtin.command:
+        cmd: >
+          podman login
+          {{ podman_registry_url }}
+          --username {{ podman_registry_username }}
+          --password-stdin
+        stdin: "{{ podman_registry_password }}"
+      no_log: true
+
+    # ==================================================
+    # OPENSHIFT LOGIN
+    # ==================================================
+
+    - name: Log in to OpenShift
+      ansible.builtin.command:
+        cmd: >
+          oc login
+          {{ oc_api_url }}
+          --token={{ oc_token }}
+      no_log: true
+
+    - name: Confirm OpenShift login
+      ansible.builtin.command:
+        cmd: oc whoami
+      register: oc_whoami
+      changed_when: false
+
+    - name: Show OpenShift login identity
+      ansible.builtin.debug:
+        msg: "Logged in as {{ oc_whoami.stdout }}"
