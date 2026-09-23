@@ -1,0 +1,39 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: my-container
+  labels:
+    app: my-container
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: my-container
+  template:
+    metadata:
+      labels:
+        app: my-container
+    spec:
+      containers:
+        - name: my-container
+          image: default-route-openshift-image-registry.apps.rm1.0a51.p1.openshiftapps.com/dheekarsw-dev/aowka:10
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            # Diambil dari ConfigMap
+            - name: MONGODB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MONGODB_DATABASE
+
+            # Diambil dari Secret
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-db-secret
+                  key: MONGO_URI
+              
+              
