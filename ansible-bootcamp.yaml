@@ -28,7 +28,7 @@
     # =========================
     # OpenShift CLI
     # =========================
-    oc_version: "4.XX.X"
+    oc_version: "4.14.16"
 
     oc_api_url: "https://api.example.com:6443"
 
