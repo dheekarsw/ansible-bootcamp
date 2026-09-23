@@ -18,17 +18,17 @@
     # =========================
     podman_registry_url: "quay.io"
 
-    podman_version: "4.9.4"
+    podman_version: "5.8.1"
 
     # =========================
     # Python
     # =========================
-    python_version: "3.13.13"
+    python_version: "3.14.3"
 
     # =========================
     # OpenShift CLI
     # =========================
-    oc_version: "4.16.35"
+    oc_version: "4.22.14"
 
     oc_api_url: "https://api.example.com:6443"
 
