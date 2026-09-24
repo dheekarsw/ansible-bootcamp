@@ -124,6 +124,16 @@
         state: present
         allow_downgrade: true
 
+     - name: Check operating system
+      ansible.builtin.command:
+        cmd: cat /etc/os-release
+      register: os_release
+      changed_when: false
+    
+    - name: Show operating system
+      ansible.builtin.debug:
+        var: os_release.stdout_lines
+
 
     # ==================================================
     # MONGODB REPOSITORY
