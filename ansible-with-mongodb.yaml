@@ -1,7 +1,7 @@
 ---
 - name: Setup environment, developer tooling, and MongoDB
   hosts: all
-  become: false
+  become: true
 
   vars:
     # --- Exact Tool Versions (Pinning) ---
